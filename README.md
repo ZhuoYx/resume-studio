@@ -4,32 +4,36 @@
 
 开源、无需注册、本地优先的简历编辑工具。支持官方固定简历模板、A4 实时预览、在线 AI 文案润色与对照确认，以及上传现有 PDF / DOCX 后逐段修改。
 
-> **当前状态：V1 初始开发版，非完整稳定发布。** 此包已完成主要源代码，但因开发环境无法访问 npm，尚未进行依赖安装、Nuxt 编译或浏览器端到端测试。请先在联网环境执行下述步骤验证，确认文档导出与移动端行为后再对外发布。
+> **当前状态：V1 开发版，非完整稳定发布。** 已完成依赖安装、本机构建与本次界面功能检查；文档兼容性、真实 AI 调用、防滥用和完整双端验收仍待完成。检查结果及环境告警见 [验证记录](docs/VERIFICATION.md)，发布待办见 [V1 范围](docs/V1_SCOPE.md)。
 
 ## 本地运行（仅开发用途）
 
-要求 Node.js ≥ 20.19 和 npm。
+建议使用 Node.js 24 LTS（≥ 24.11）及 pnpm。当前锁定的 Nuxt 4.6.2 已不支持 Node 20。
 
 ```bash
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm dev
 # 打开 http://localhost:3000
 ```
 
 检查构建：
 
 ```bash
-npm run typecheck
-npm run build
+pnpm typecheck
+pnpm test:ai
+pnpm build
 ```
 
 当前 V1 不维护自部署安装包、Docker 和 Ollama 适配。上述仅为本地开发指令，非正式自部署支持。
 
 ## 两种工作模式
 
+全站提供浅色、深色、跟随系统三种外观，默认跟随系统。外观偏好通过 Cookie 保存；简历预览与打印始终使用白纸配色。侧栏底部显示当前服务商的 API Key 填写状态，可直接进入 AI 设置；填写不代表已通过服务商验证。
+
 ### 1. 创建简历（`/editor`）
 
 - 结构化编辑姓名、联系信息、工作经历、项目、教育和技能
+- 可选上传简历照片（JPG / PNG / WebP，最大 5MB），在浏览器内居中裁成 3:4、压缩为 300×400 JPEG，支持更换或移除；随简历保存在 IndexedDB，四套模板预览、打印 PDF 与 DOCX 导出均包含照片。不上传不预留照片位置，兼容旧简历
 - 选择四款**官方固定模板**：极简专业、现代商务、校园求职、技术工程师
 - PC 分栏编辑+预览；移动端「编辑 / 预览」标签页
 - 自动保存到浏览器 IndexedDB，支持多份简历与复制
@@ -41,12 +45,15 @@ npm run build
 - 支持 10MB 内 `.docx` 和文本型 `.pdf`，文件在**浏览器本地解析**
 - 支持段落手动编辑、逐段 AI 润色、原文对照、改动审核
 - DOCX：在原 OOXML 文档中局部替换文本，尽量保留段落/样式结构，**不保证**字符级格式或分页完全一致
-- PDF：提取文本供优化、复制或使用浏览器打印为**重新排版的 PDF**，**不提供原 PDF 原位置文本替换**；扫描 PDF/OCR 暂不支持
+- PDF：只提取文字，不解析图片。需要头像时请重新上传 JPG / PNG / WebP 图片（选填）；编辑后的文字和手动上传的头像可打印为**重新排版的 PDF**，不保留原 PDF 的图片和版式，**不提供原 PDF 原位置文本替换**
+- 扫描版 PDF 暂不支持 OCR。导入 DOCX 尚不提取图片，原包导出保留原图片资源，但需核对位置
 
 ### AI 的安全边界
 
 - **完全可选**：不输入 Key 也能手动操作和导出
-- 初期仅 OpenAI、DeepSeek、Qwen；用户提供 API Key 和模型 ID
+- 支持 OpenAI、DeepSeek、Qwen、MiniMax；用户提供 API Key 和模型 ID
+- MiniMax 接入中国区固定地址 `https://api.minimax.cn/v1/chat/completions`，默认 `MiniMax-M3.1-Flash`，模型 ID 可修改。参数依据 [MiniMax 官方文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)，思考内容不会写入建议正文
+- 切换服务商会清除旧 Key，避免跨平台误发；刷新页面后也需重新填写
 - Key 只在当前浏览器会话的内存状态中暂存；不写入 `localStorage`、IndexedDB、源代码或服务器数据库
 - 只有用户主动调用 AI 时，所选文本、Key 和模型参数才通过 Nuxt Nitro 代理发送给对应 AI 服务商
 - 服务器转发请求仍然可能被网站运营方观察；请仅在可信站点填写 Key，建议使用单独、低额度 Key

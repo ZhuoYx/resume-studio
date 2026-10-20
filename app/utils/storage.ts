@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { toRaw } from 'vue'
 import type { ResumeData } from '~/types/resume'
 
 class ResumeDatabase extends Dexie {
@@ -15,7 +16,7 @@ export async function loadLatestResume(): Promise<ResumeData | undefined> {
   return db().resumes.orderBy('updatedAt').last()
 }
 export async function persistResume(resume: ResumeData): Promise<void> {
-  await db().resumes.put(structuredClone(resume))
+  await db().resumes.put(structuredClone(toRaw(resume)))
 }
 export async function listResumes(): Promise<ResumeData[]> {
   return db().resumes.orderBy('updatedAt').reverse().toArray()

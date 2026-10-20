@@ -5,6 +5,9 @@ import { polishText, type PolishInstruction } from '~/utils/ai'
 const settings = useAiSettings()
 const file = shallowRef<File | null>(null)
 const format = ref<'pdf' | 'docx' | ''>('')
+const pdfAvatar = ref<string | null>(null)
+let importController: AbortController | undefined
+onBeforeUnmount(() => importController?.abort())
 const paragraphs = ref<DocumentParagraph[]>([])
 const selectedId = ref<number | null>(null)
 const proposed = ref('')
@@ -20,11 +23,15 @@ async function upload(event: Event) {
   const input = event.target as HTMLInputElement
   const chosen = input.files?.[0]
   if (!chosen) return
-  file.value = null; paragraphs.value = []; proposed.value = ''; selectedId.value = null; error.value = ''
+  importController?.abort()
+  importController = new AbortController()
+  file.value = null; pdfAvatar.value = null; paragraphs.value = []; proposed.value = ''; selectedId.value = null; error.value = ''
   uploadBusy.value = true
   try {
     format.value = validateFile(chosen)
-    const extracted = format.value === 'docx' ? await readDocxParagraphs(chosen) : await readPdfParagraphs(chosen)
+    const extracted = format.value === 'pdf'
+      ? await readPdfParagraphs(chosen, importController.signal)
+      : await readDocxParagraphs(chosen)
     if (!extracted.length) throw new Error('未提取到可编辑的文字')
     file.value = chosen
     paragraphs.value = extracted
@@ -54,18 +61,19 @@ async function copyAll() {
   catch { error.value = '复制失败，请手动选择内容复制' }
 }
 function printPdf() { window.print() }
-function reset() { file.value = null; format.value = ''; paragraphs.value = []; proposed.value = ''; selectedId.value = null; error.value = '' }
+function reset() { importController?.abort(); file.value = null; format.value = ''; pdfAvatar.value = null; paragraphs.value = []; proposed.value = ''; selectedId.value = null; error.value = '' }
 </script>
 <template>
   <AppShell><template #title>上传简历并润色</template>
     <div class="page-heading"><span class="eyebrow">DOCUMENT POLISHING</span><h1>让现有简历表达更出色</h1><p>保留你的事实内容，逐段提出改进建议。每一项修改都由你最终确认。</p></div>
     <div v-if="error" class="alert-error" role="alert">{{ error }}</div>
-    <div v-if="!file" class="upload-zone"><UploadCloud :size="40" /><h2>导入已有简历</h2><p>支持 PDF 与 DOCX，最大 10MB。文件在浏览器解析，不自动上传到服务器。</p><label class="button button-primary upload-button"><input type="file" class="sr-only" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" :disabled="uploadBusy" @change="upload" />{{ uploadBusy ? '正在提取文本…' : '选择简历文件' }}</label><small>扫描版 PDF 暂不支持 OCR · 建议优先使用 DOCX</small></div>
+    <div v-if="!file" class="upload-zone"><UploadCloud :size="40" /><h2>导入已有简历</h2><p>支持 PDF 与 DOCX，最大 10MB。文件在浏览器解析，不自动上传到服务器。</p><label class="button button-primary upload-button"><input type="file" class="sr-only" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" :disabled="uploadBusy" @change="upload" />{{ uploadBusy ? '正在提取文本…' : '选择简历文件' }}</label><small>PDF 上传无法解析图片，如需头像请重新上传图片。扫描版 PDF 暂不支持 OCR。</small></div>
     <template v-else>
       <div class="import-file-info"><div class="import-filename"><FileText :size="19" /><div><strong>{{ file.name }}</strong><small>{{ paragraphs.length }} 段可编辑内容 · 已修改 {{ changed }} 段</small></div></div><button class="button" @click="reset"><ArrowLeft :size="15" /> 更换文件</button></div>
-      <div class="notice-inline" v-if="format === 'pdf'">PDF 为固定版式文件，当前支持提取、润色和复制文本；无法直接在原 PDF 中无损替换文字。可通过打印生成重新排版的 PDF。</div>
-      <div class="notice-inline" v-else>DOCX 导出将尽量保留原文档段落和样式结构，但修改字数可能影响字体分段、换行和分页；导出后请用 Word 检查。</div>
-      <div class="import-layout">
+      <div class="notice-inline" v-if="format === 'pdf'">PDF 上传无法解析图片，如需头像请重新上传图片。导出 PDF 会重新排版文字及你上传的头像，不保留原图片和版式。</div>
+      <div class="notice-inline" v-else>当前仅展示 DOCX 文字，不提取或编辑原头像和图片。导出时保留原文件中的图片资源，但文字修改可能影响图片位置、换行和分页；导出后请用 Word 检查。</div>
+      <div v-if="format === 'pdf'" class="import-avatar-upload"><AvatarUpload v-model="pdfAvatar" /></div>
+      <div v-if="paragraphs.length" class="import-layout">
         <aside class="paragraph-list"><h3>文档段落</h3><button v-for="p in paragraphs" :key="p.id" class="paragraph-item" :class="{ active: p.id === selectedId, modified: p.text !== p.original }" @click="select(p.id)"><span>{{ p.text.slice(0, 78) || '空段落' }}</span><small v-if="p.text !== p.original">已修改</small></button></aside>
         <section v-if="current" class="paragraph-workspace"><h3>原文与修改</h3><label class="field">当前文案 <textarea v-model="current.text" rows="7" maxlength="12000" placeholder="可直接修改文本" /></label>
           <div class="ai-polish-box"><div class="ai-polish-header"><strong><Sparkles :size="17" /> AI 优化</strong><NuxtLink v-if="!settings.apiKey" to="/settings" class="tiny-link">配置 API Key</NuxtLink></div>
@@ -77,8 +85,8 @@ function reset() { file.value = null; format.value = ''; paragraphs.value = []; 
           <div class="paragraph-original"><strong>原始内容（对照）</strong><p>{{ current.original }}</p></div>
         </section>
       </div>
-      <div class="import-export"><button v-if="format === 'docx'" class="button button-primary" :disabled="downloadBusy" @click="exportDocx"><Download :size="16" /> {{ downloadBusy ? '正在导出…' : '下载优化后的 DOCX' }}</button><button v-else class="button button-primary" @click="printPdf"><Printer :size="16" /> 打印 / 保存为 PDF（重排）</button><button class="button" @click="copyAll"><ClipboardCopy :size="16" /> 复制全部文案</button></div>
-      <div class="polish-print-content"><h1>{{ file.name.replace(/\.pdf$/i, '') }}</h1><p v-for="p in paragraphs" :key="p.id">{{ p.text }}</p></div>
+      <div v-if="paragraphs.length" class="import-export"><button v-if="format === 'docx'" class="button button-primary" :disabled="downloadBusy" @click="exportDocx"><Download :size="16" /> {{ downloadBusy ? '正在导出…' : '下载优化后的 DOCX' }}</button><button v-else class="button button-primary" @click="printPdf"><Printer :size="16" /> 打印 / 保存为 PDF（重排）</button><button class="button" @click="copyAll"><ClipboardCopy :size="16" /> 复制全部文案</button></div>
+      <div class="polish-print-content"><div class="polish-print-heading"><h1>{{ file.name.replace(/\.pdf$/i, '') }}</h1><img v-if="pdfAvatar" :src="pdfAvatar" alt="简历头像" width="90" height="120" /></div><p v-for="p in paragraphs" :key="p.id">{{ p.text }}</p></div>
     </template>
   </AppShell>
 </template>

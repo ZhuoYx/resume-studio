@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { ResumeData } from '~/types/resume'
+import { avatarSource } from '~/utils/avatar'
 const props = defineProps<{ resume: ResumeData }>()
+const avatar = computed(() => avatarSource(props.resume.profile.avatar))
 const themeTitle = computed(() => ({ minimal: '简历', business: 'RESUME', graduate: '个人简历', engineer: 'ENGINEER PROFILE' })[props.resume.template])
 const sections = computed(() => {
   const data = props.resume
@@ -15,14 +17,17 @@ const sections = computed(() => {
 <template>
   <article class="resume-paper" :class="`resume-${resume.template}`" aria-label="简历 A4 预览">
     <div class="resume-accent" />
-    <div class="resume-header">
-      <div class="resume-kicker">{{ themeTitle }}</div>
-      <h1>{{ resume.profile.name || '你的姓名' }}</h1>
-      <div class="resume-role">{{ resume.profile.title || '目标职位 / 专业方向' }}</div>
-      <div class="resume-contact">
-        <span v-for="(part, idx) in [resume.profile.phone, resume.profile.email, resume.profile.location, resume.profile.website].filter(Boolean)" :key="idx">{{ part }}</span>
-        <span v-if="![resume.profile.phone, resume.profile.email, resume.profile.location, resume.profile.website].some(Boolean)">联系方式 · 电子邮箱 · 所在城市</span>
+    <div class="resume-header" :class="{ 'has-avatar': avatar }">
+      <div class="resume-heading">
+        <div class="resume-kicker">{{ themeTitle }}</div>
+        <h1>{{ resume.profile.name || '你的姓名' }}</h1>
+        <div class="resume-role">{{ resume.profile.title || '目标职位 / 专业方向' }}</div>
+        <div class="resume-contact">
+          <span v-for="(part, idx) in [resume.profile.phone, resume.profile.email, resume.profile.location, resume.profile.website].filter(Boolean)" :key="idx">{{ part }}</span>
+          <span v-if="![resume.profile.phone, resume.profile.email, resume.profile.location, resume.profile.website].some(Boolean)">联系方式 · 电子邮箱 · 所在城市</span>
+        </div>
       </div>
+      <img v-if="avatar" class="resume-avatar" :src="avatar" alt="简历照片" width="90" height="120" />
     </div>
     <div class="resume-body">
       <section v-if="resume.profile.summary.trim()" class="resume-section">

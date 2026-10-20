@@ -17,6 +17,7 @@ const tabs: { id: typeof active.value; label: string }[] = [
     </div>
     <div v-if="active === 'profile'" class="form-content">
       <h3>基本信息</h3><p class="muted small">完善个人信息，预览区域会实时同步。</p>
+      <AvatarUpload :key="resume.id" v-model="resume.profile.avatar" />
       <div class="field-grid">
         <label class="field">姓名 <input v-model="resume.profile.name" placeholder="如：张三" maxlength="80" /></label>
         <label class="field">求职职位 <input v-model="resume.profile.title" placeholder="如：前端开发工程师" maxlength="100" /></label>

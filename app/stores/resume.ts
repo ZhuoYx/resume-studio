@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { toRaw } from 'vue'
 import { createResume, newId, type ResumeData, type TemplateId } from '~/types/resume'
 import { loadLatestResume, persistResume, listResumes, removeResume } from '~/utils/storage'
 
@@ -40,7 +41,7 @@ export const useResumeStore = defineStore('resume', {
       if (selected) this.resume = selected
     },
     async duplicate() {
-      this.resume = { ...structuredClone(this.resume), id: newId(), updatedAt: new Date().toISOString() }
+      this.resume = { ...structuredClone(toRaw(this.resume)), id: newId(), updatedAt: new Date().toISOString() }
       await this.save()
     },
     async deleteCurrent() {

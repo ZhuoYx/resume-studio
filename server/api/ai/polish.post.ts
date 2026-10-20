@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { createError, readBody, setHeader, getHeader } from 'h3'
 
 const schema = z.object({
-  provider: z.enum(['openai', 'deepseek', 'qwen']),
+  provider: z.enum(['openai', 'deepseek', 'qwen', 'minimax']),
   apiKey: z.string().trim().min(8).max(1024),
   model: z.string().trim().min(1).max(100).regex(/^[a-zA-Z0-9._:/-]+$/),
   original: z.string().trim().min(2).max(12000),
@@ -12,7 +12,8 @@ const schema = z.object({
 const endpoint: Record<string, string> = {
   openai: 'https://api.openai.com/v1/chat/completions',
   deepseek: 'https://api.deepseek.com/chat/completions',
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
+  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+  minimax: 'https://api.minimax.cn/v1/chat/completions'
 }
 const guides: Record<string, string> = {
   professional: '提升专业性，采用清晰、符合中文简历习惯的表达',
@@ -38,7 +39,10 @@ export default defineEventHandler(async event => {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model, temperature: 0.3, max_tokens: 1600,
+        model,
+        ...(provider === 'minimax'
+          ? { max_completion_tokens: 8192, reasoning_split: true, reasoning_effort: 'low' }
+          : { temperature: 0.3, max_tokens: 1600 }),
         messages: [
           { role: 'system', content: `你是一名专业中文简历编辑。${guides[instruction]}。禁止虚构业绩数字、学历、工作经历或技能。只输出修改后的正文，不要加入说明，不要输出 Markdown 代码块。尽量控制篇幅接近原文，以减少排版变化。` },
           { role: 'user', content: `原文：\n${original}${jobDescription ? `\n\n目标岗位说明：\n${jobDescription}` : ''}` }
@@ -53,8 +57,20 @@ export default defineEventHandler(async event => {
     const status = response.status === 401 || response.status === 403 ? 401 : 502
     throw createError({ statusCode: status, statusMessage: status === 401 ? 'API Key 无效或没有模型权限' : 'AI 服务请求失败，请检查模型和额度' })
   }
-  const result = await response.json() as { choices?: { message?: { content?: string } }[] }
-  const proposal = result.choices?.[0]?.message?.content?.trim()
+  let result: { choices?: { finish_reason?: string; message?: { content?: unknown } }[] }
+  try {
+    result = await response.json()
+  } catch {
+    throw createError({ statusCode: 502, statusMessage: 'AI 服务返回了无效响应' })
+  }
+  const choice = result?.choices?.[0]
+  if (choice?.finish_reason === 'length') {
+    throw createError({ statusCode: 502, statusMessage: 'AI 输出达到长度限制，请缩短原文后重试' })
+  }
+  const content = choice?.message?.content
+  const proposal = typeof content === 'string'
+    ? (provider === 'minimax' ? content.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*$/gi, '') : content).trim()
+    : ''
   if (!proposal || proposal.length > 24000) throw createError({ statusCode: 502, statusMessage: 'AI 未返回有效润色文本' })
   return { proposal }
 })

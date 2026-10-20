@@ -1,6 +1,8 @@
 export type TemplateId = 'minimal' | 'business' | 'graduate' | 'engineer'
 
 export interface Profile {
+  /** Optional, locally normalized JPEG data URL. Missing on older resumes. */
+  avatar?: string | null
   name: string
   title: string
   email: string
@@ -52,7 +54,7 @@ export function newId(): string {
 export function createResume(): ResumeData {
   return {
     id: newId(), updatedAt: new Date().toISOString(), template: 'minimal',
-    profile: { name: '', title: '', email: '', phone: '', location: '', website: '', summary: '' },
+    profile: { avatar: null, name: '', title: '', email: '', phone: '', location: '', website: '', summary: '' },
     experiences: [], education: [], projects: [], skills: ''
   }
 }

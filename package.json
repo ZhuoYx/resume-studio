@@ -10,7 +10,9 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
-    "check:structure": "node scripts/check-structure.mjs"
+    "check:structure": "node scripts/check-structure.mjs",
+    "test:ai": "node --test scripts/test-ai-proxy.mjs",
+    "test:avatar": "node --test scripts/test-avatar.mjs"
   },
   "dependencies": {
     "nuxt": "^4.0.0",
@@ -30,6 +32,6 @@
     "vue-tsc": "^3.1.0"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": "^22.21.0 || ^24.11.0 || >=26.0.0"
   }
 }
